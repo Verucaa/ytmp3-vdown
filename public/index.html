@@ -1,0 +1,446 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube to MP3/MP4 Converter</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff0000;
+            --primary-dark: #cc0000;
+            --secondary: #282828;
+            --light: #f8f9fa;
+            --dark: #212121;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: var(--light);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            padding: 2rem 0;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 1rem;
+        }
+        
+        .logo i {
+            color: var(--primary);
+            font-size: 2.5rem;
+        }
+        
+        .logo h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, var(--primary), #ff6b6b);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .tagline {
+            color: #aaa;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .converter-box {
+            background: rgba(40, 40, 40, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 800px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .url-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .url-input input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #444;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .url-input input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .format-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .format-option {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .format-option:hover {
+            background: rgba(255, 0, 0, 0.1);
+            border-color: var(--primary);
+        }
+        
+        .format-option.active {
+            background: rgba(255, 0, 0, 0.2);
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.2);
+        }
+        
+        .format-option i {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        
+        .quality-selector {
+            margin: 1.5rem 0;
+        }
+        
+        .quality-selector select {
+            width: 100%;
+            padding: 15px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #444;
+            color: white;
+            font-size: 1rem;
+        }
+        
+        .convert-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(45deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .convert-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 0, 0, 0.3);
+        }
+        
+        .convert-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result-container {
+            display: none;
+            background: rgba(40, 40, 40, 0.9);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-top: 2rem;
+            animation: slideDown 0.5s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .video-info {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 2rem;
+            align-items: center;
+        }
+        
+        .thumbnail {
+            width: 180px;
+            height: 120px;
+            border-radius: 10px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        
+        .thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .video-details {
+            flex: 1;
+        }
+        
+        .video-details h3 {
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+        
+        .video-details p {
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        
+        .download-options {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .download-btn {
+            padding: 15px;
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 123, 255, 0.3);
+        }
+        
+        .download-btn.mp3 {
+            background: linear-gradient(45deg, #28a745, #1e7e34);
+        }
+        
+        .download-btn.mp3:hover {
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.3);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #f8d7da;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            display: none;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 3rem;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .feature-card i {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 2rem 0;
+            color: #aaa;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .video-info {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .thumbnail {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .format-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fab fa-youtube"></i>
+                <h1>YT Converter</h1>
+            </div>
+            <p class="tagline">Download video YouTube ke MP3 & MP4 dengan kualitas terbaik</p>
+        </header>
+
+        <main>
+            <div class="converter-box">
+                <div class="url-input">
+                    <input type="url" id="urlInput" placeholder="Masukkan link YouTube..." autocomplete="off">
+                    <button class="convert-btn" id="pasteBtn" title="Tempel URL">
+                        <i class="fas fa-paste"></i>
+                    </button>
+                </div>
+
+                <div class="format-selector">
+                    <div class="format-option active" data-format="mp3">
+                        <i class="fas fa-music"></i>
+                        <h3>MP3 Audio</h3>
+                        <p>Kualitas audio terbaik</p>
+                    </div>
+                    <div class="format-option" data-format="mp4">
+                        <i class="fas fa-video"></i>
+                        <h3>MP4 Video</h3>
+                        <p>Video dengan audio</p>
+                    </div>
+                </div>
+
+                <div class="quality-selector" id="qualitySelector" style="display: none;">
+                    <select id="qualitySelect">
+                        <option value="best">Kualitas Terbaik</option>
+                        <option value="1920p">1920p (UHD)</option>
+                        <option value="1280p">1280p (UHD)</option>
+                        <option value="1080p">1080p (HD)</option>
+                        <option value="854p">854p (HD)</option>
+                        <option value="640p">640p (SD)</option>
+                        <option value="426p">426p (SD)</option>
+                        <option value="256p">256p (SD)</option>
+                    </select>
+                </div>
+
+                <button class="convert-btn" id="convertBtn">
+                    <i class="fas fa-download"></i>
+                    Konversi Sekarang
+                </button>
+
+                <div class="error" id="errorBox"></div>
+
+                <div class="loading" id="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Sedang memproses video...</p>
+                    <p class="status" id="statusText"></p>
+                </div>
+
+                <div class="result-container" id="resultContainer">
+                    <div class="video-info">
+                        <div class="thumbnail">
+                            <img id="videoThumbnail" src="" alt="Thumbnail">
+                        </div>
+                        <div class="video-details">
+                            <h3 id="videoTitle"></h3>
+                            <p id="videoAuthor"></p>
+                            <p id="videoDuration"></p>
+                        </div>
+                    </div>
+
+                    <div class="download-options" id="downloadOptions"></div>
+                </div>
+            </div>
+
+            <div class="features">
+                <div class="feature-card">
+                    <i class="fas fa-bolt"></i>
+                    <h3>Cepat & Mudah</h3>
+                    <p>Konversi hanya dalam beberapa detik</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Aman & Privat</h3>
+                    <p>Tidak menyimpan data pengguna</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-mobile-alt"></i>
+                    <h3>Responsif</h3>
+                    <p>Akses dari desktop atau mobile</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-infinity"></i>
+                    <h3>Tanpa Batas</h3>
+                    <p>Tidak ada limit download</p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 YouTube Converter. Untuk penggunaan pribadi.</p>
+            <p>Disclaimer: Hanya untuk konten yang diperbolehkan oleh pemilik hak cipta.</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+                  </html>
