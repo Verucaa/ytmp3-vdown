@@ -22,6 +22,102 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentQuality = 'best';
     let currentVideoInfo = null;
     
+    // ========== FUNGSI BARU UNTUK SANITASI FILENAME ==========
+    function sanitizeFilename(filename) {
+        return filename
+            // Hapus karakter khusus yang tidak valid untuk semua OS
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+            // Ganti multiple spaces dengan single space dulu
+            .replace(/\s+/g, ' ')
+            // Trim spasi di awal dan akhir
+            .trim()
+            // Ganti semua spasi dengan underscore
+            .replace(/\s/g, '_')
+            // Hapus karakter non-ASCII (opsional, bisa diaktifkan jika perlu)
+            // .replace(/[^\x00-\x7F]/g, '')
+            // Hapus karakter underscore berlebihan
+            .replace(/_+/g, '_')
+            // Hapus underscore di awal dan akhir
+            .replace(/^_+|_+$/g, '')
+            // Batasi panjang filename
+            .substring(0, 100);
+    }
+    
+    // Fungsi untuk generate safe filename dengan timestamp
+    function generateSafeFilename(originalTitle, videoId, format) {
+        let safeName = originalTitle || `youtube_video_${videoId || 'unknown'}`;
+        
+        // Sanitasi nama
+        safeName = sanitizeFilename(safeName);
+        
+        // Jika setelah sanitasi kosong, gunakan fallback
+        if (!safeName || safeName.length < 3) {
+            safeName = `youtube_${videoId || Date.now().toString().slice(-6)}`;
+        }
+        
+        // Tambahkan timestamp untuk keunikan
+        const timestamp = Date.now().toString().slice(-6);
+        safeName = `${safeName}_${timestamp}`;
+        
+        // Tambahkan ekstensi
+        const extension = format === 'mp3' ? '.mp3' : '.mp4';
+        safeName += extension;
+        
+        return safeName;
+    }
+    
+    // Fungsi untuk encode filename ke URL dengan aman
+    function encodeFilenameForUrl(filename) {
+        // Encode semua karakter kecuali alphanumeric, underscore, dash, dan dot
+        return filename.replace(/[^a-zA-Z0-9_\-.]/g, function(c) {
+            return '%' + c.charCodeAt(0).toString(16).toUpperCase();
+        });
+    }
+    
+    // ========== FUNGSI BARU UNTUK DOWNLOAD VIA BLOB ==========
+    async function downloadViaBlob(url, filename) {
+        try {
+            // Update status
+            statusText.textContent = 'Menyiapkan download...';
+            
+            // Fetch file
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Get blob
+            const blob = await response.blob();
+            
+            // Create blob URL
+            const blobUrl = window.URL.createObjectURL(blob);
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            
+            // Trigger download
+            link.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+                statusText.textContent = 'Download selesai!';
+            }, 1000);
+            
+            return true;
+        } catch (error) {
+            console.error('Blob download error:', error);
+            throw error;
+        }
+    }
+    
+    // ========== FUNGSI YANG SUDAH ADA (DENGAN PERBAIKAN) ==========
+    
     // Initialize format selection
     formatOptions.forEach(option => {
         option.addEventListener('click', function() {
@@ -302,8 +398,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await pollConversionJob(jobId, token, currentFormat);
             
             if (result.ready && result.dlurl) {
-                // Success! Show download button
+                // Success! Show download button dan langsung download
                 showDownloadButton(result.dlurl);
+                
+                // Langsung coba download otomatis setelah 500ms
+                setTimeout(() => {
+                    triggerAutoDownload(result.dlurl);
+                }, 500);
+                
             } else if (result.error) {
                 throw new Error(result.error);
             } else {
@@ -317,6 +419,42 @@ document.addEventListener('DOMContentLoaded', function() {
             loading.style.display = 'none';
             convertBtn.disabled = false;
             convertBtn.innerHTML = '<i class="fas fa-download"></i> Konversi Sekarang';
+        }
+    }
+    
+    // ========== FUNGSI BARU: TRIGGER AUTO DOWNLOAD ==========
+    async function triggerAutoDownload(downloadUrl) {
+        try {
+            // Dapatkan video info untuk nama file
+            const videoId = extractVideoId(urlInput.value);
+            const originalTitle = currentVideoInfo?.title || `YouTube Video ${videoId}`;
+            const filename = generateSafeFilename(originalTitle, videoId, currentFormat);
+            
+            // Coba download langsung via link (Method 1)
+            const directLink = document.getElementById('directDownloadBtn');
+            if (directLink) {
+                // Update link dengan filename yang sudah disanitasi
+                directLink.download = filename;
+                
+                // Coba click otomatis
+                directLink.click();
+                
+                // Cek setelah 2 detik apakah download berhasil
+                setTimeout(async () => {
+                    // Jika belum terdownload, coba method blob (Method 2)
+                    try {
+                        statusText.textContent = 'Mencoba metode alternatif...';
+                        await downloadViaBlob(downloadUrl, filename);
+                        showError('Download berhasil via metode alternatif!', 3000);
+                    } catch (blobError) {
+                        console.error('Blob download also failed:', blobError);
+                        showError('Download otomatis gagal. Silahkan klik tombol download secara manual.', 5000);
+                    }
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Auto download error:', error);
+            showError('Download otomatis gagal. Silahkan klik tombol download secara manual.', 5000);
         }
     }
     
@@ -435,21 +573,24 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('Konversi timeout setelah 30 percobaan');
     }
     
-    // Function to show download button
+    // ========== FUNGSI YANG DIPERBAIKI: showDownloadButton ==========
     function showDownloadButton(downloadUrl) {
         const videoId = extractVideoId(urlInput.value);
-        let fileName = 'youtube_video';
         
-        if (currentVideoInfo && currentVideoInfo.title) {
-            fileName = currentVideoInfo.title
-                .replace(/[^\w\s]/gi, '')
-                .replace(/\s+/g, '_')
-                .substring(0, 50);
-        } else if (videoId) {
-            fileName = videoId;
-        }
+        // Generate safe filename dengan sanitasi
+        const originalTitle = currentVideoInfo?.title || `YouTube_Video_${videoId || 'unknown'}`;
+        const fileName = generateSafeFilename(originalTitle, videoId, currentFormat);
         
-        fileName += currentFormat === 'mp3' ? '.mp3' : '.mp4';
+        // Encode filename untuk URL
+        const encodedFileName = encodeFilenameForUrl(fileName);
+        
+        // Buat URL download dengan parameter filename untuk memastikan download
+        let safeDownloadUrl = downloadUrl;
+        const separator = safeDownloadUrl.includes('?') ? '&' : '?';
+        
+        // Tambahkan parameter untuk memastikan file terdownload dengan nama yang benar
+        // Beberapa server memerlukan parameter 'filename' atau 'download'
+        safeDownloadUrl = `${safeDownloadUrl}${separator}filename=${encodedFileName}&attachment=1&_=${Date.now()}`;
         
         const downloadHTML = `
             <div class="download-success">
@@ -457,15 +598,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fas fa-check-circle"></i>
                 </div>
                 <h3>Konversi Berhasil!</h3>
-                <p>File siap diunduh</p>
+                <p>File sedang didownload otomatis...</p>
                 
-                <a href="${downloadUrl}" class="download-btn ${currentFormat === 'mp3' ? 'mp3' : 'mp4'}" 
+                <!-- Link download utama dengan filename yang sudah disanitasi -->
+                <a href="${safeDownloadUrl}" class="download-btn ${currentFormat === 'mp3' ? 'mp3' : 'mp4'}" 
                    download="${fileName}" id="directDownloadBtn">
                     <i class="fas fa-arrow-down"></i>
                     Download ${currentFormat.toUpperCase()} 
                     ${currentFormat === 'mp4' ? `(${currentQuality})` : ''}
                     <span class="file-size" id="fileSize">Mendapatkan ukuran file...</span>
                 </a>
+                
+                <!-- Tombol alternatif jika download otomatis gagal -->
+                <div class="alternative-download" style="margin-top: 15px; display: none;" id="alternativeDownload">
+                    <p style="color: #ffc107; margin-bottom: 10px;">
+                        <i class="fas fa-exclamation-triangle"></i> Download otomatis gagal. Coba:
+                    </p>
+                    <button class="secondary-btn" id="manualDownloadBtn">
+                        <i class="fas fa-download"></i> Klik untuk Download Manual
+                    </button>
+                    <button class="secondary-btn" id="blobDownloadBtn">
+                        <i class="fas fa-cloud-download-alt"></i> Download via Blob (Alternatif)
+                    </button>
+                </div>
                 
                 <div class="additional-options">
                     <button class="secondary-btn" id="copyLinkBtn">
@@ -477,8 +632,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 
                 <div class="download-info">
-                    <p><i class="fas fa-info-circle"></i> Klik tombol di atas untuk mengunduh. 
-                    Jika download tidak dimulai, klik kanan dan pilih "Save link as..."</p>
+                    <p><i class="fas fa-info-circle"></i> Download seharusnya mulai otomatis.</p>
+                    <p><i class="fas fa-file-alt"></i> Nama file: <code>${fileName}</code></p>
+                    <p><i class="fas fa-lightbulb"></i> Jika download tidak dimulai, gunakan tombol di atas.</p>
                 </div>
             </div>
         `;
@@ -486,11 +642,26 @@ document.addEventListener('DOMContentLoaded', function() {
         downloadOptions.innerHTML = downloadHTML;
         
         // Get file size
-        getFileSize(downloadUrl);
+        getFileSize(safeDownloadUrl);
         
-        // Add event listeners for new buttons
+        // Event listeners untuk tombol manual
+        document.getElementById('manualDownloadBtn').addEventListener('click', function() {
+            document.getElementById('directDownloadBtn').click();
+        });
+        
+        document.getElementById('blobDownloadBtn').addEventListener('click', async function() {
+            try {
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+                await downloadViaBlob(safeDownloadUrl, fileName);
+                this.innerHTML = '<i class="fas fa-check"></i> Berhasil!';
+            } catch (error) {
+                this.innerHTML = '<i class="fas fa-times"></i> Gagal';
+                showError('Download via Blob gagal: ' + error.message);
+            }
+        });
+        
         document.getElementById('copyLinkBtn').addEventListener('click', function() {
-            navigator.clipboard.writeText(downloadUrl)
+            navigator.clipboard.writeText(safeDownloadUrl)
                 .then(() => {
                     const originalText = this.innerHTML;
                     this.innerHTML = '<i class="fas fa-check"></i> Link Disalin!';
@@ -511,20 +682,28 @@ document.addEventListener('DOMContentLoaded', function() {
             convertBtn.innerHTML = '<i class="fas fa-download"></i> Konversi Sekarang';
         });
         
-        // Auto-click download button after 1 second (optional)
+        // Tampilkan tombol alternatif setelah 3 detik jika belum terdownload
         setTimeout(() => {
-            // Uncomment below line for auto-download
-            // document.getElementById('directDownloadBtn').click();
-        }, 1000);
+            document.getElementById('alternativeDownload').style.display = 'block';
+        }, 3000);
         
         // Scroll to result
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     
-    // Function to get file size
+    // Function to get file size (dengan perbaikan)
     async function getFileSize(url) {
         try {
-            const response = await fetch(url, { method: 'HEAD' });
+            // Bersihkan URL dari parameter tambahan untuk HEAD request
+            const cleanUrl = url.split('?')[0];
+            
+            const response = await fetch(cleanUrl, { 
+                method: 'HEAD',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            
             const contentLength = response.headers.get('content-length');
             
             if (contentLength) {
@@ -729,6 +908,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 margin-right: 8px;
             }
             
+            .download-info code {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 0.9rem;
+                color: #4dc0ff;
+                word-break: break-all;
+                display: inline-block;
+                margin-top: 5px;
+            }
+            
+            .alternative-download {
+                background: rgba(255, 193, 7, 0.1);
+                border-radius: 10px;
+                padding: 15px;
+                margin: 15px 0;
+                border-left: 4px solid #ffc107;
+            }
+            
             @media (max-width: 768px) {
                 .additional-options {
                     flex-direction: column;
@@ -737,6 +936,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 .secondary-btn {
                     width: 100%;
                     justify-content: center;
+                }
+                
+                .alternative-download {
+                    padding: 10px;
                 }
             }
         `;
